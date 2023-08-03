@@ -66,20 +66,19 @@ namespace StringLib
     }
     public class Rule
     {
-        internal static Rule Empty = new Rule("", "", "Empty");
+        internal static Rule Empty = new Rule("Empty", "", "");
         internal static int RuleCounter = 1;
         public readonly string Name;
         public readonly string Pattern;  // regex  
         public readonly string Replace;
 
 
-        public Rule(string find, string replace) : this(find, replace, "") { }
+        public Rule(string find, string replace) : this("Rule" + RuleCounter++, find, replace) { }
 
 
         public Rule(string name, string find, string replace)
         {
-            if (string.IsNullOrWhiteSpace(name))
-                name = "Rule" + RuleCounter++;
+            if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
             this.Name = name;
             this.Pattern = find;
             this.Replace = replace;
@@ -94,23 +93,23 @@ namespace StringLib
         internal class Text
         {
             public string Value;
-            public string Substitute;
-            public Rule Rule;
+            //public string Substitute;
+            //public Rule Rule;
             public BitArray Mask;
             public bool IsImmutable => Mask.IsAllSet();
             public Text(string value, bool immutable = false)
             {
                 this.Value = value;
-                this.Substitute = "";
+                //                this.Substitute = "";
                 this.Mask = new BitArray(value.Length, immutable);
-                this.Rule = Rule.Empty;
+                //                this.Rule = Rule.Empty;
             }
             private Text(string value, BitArray mask)
             {
                 this.Value = value;
-                this.Substitute = "";
+                //                this.Substitute = "";
                 this.Mask = mask;
-                this.Rule = Rule.Empty;
+                //                this.Rule = Rule.Empty;
             }
             public int Length => Value.Length;
             public Text Insert(Text text, Match pos, Text insert, out int lengthChange)
@@ -319,7 +318,7 @@ namespace StringLib
 
             Debug.WriteLine($"{nameof(Write)} processed {len}/{orig_len} characters{(skipRules | Rules.Count == 0 ? " not applying any rules" : $" processing {Rules.Count} rule(s)")} in {TTE.ElapsedMilliseconds}ms");
         }
-        private List<Text> CreateLeafs(Text text, Rule rule, RegexOptions options)
+        private List<Text> Transform(Text text, Rule rule, RegexOptions options)
         {
             var matches = Regex.Matches(text.Value, rule.Pattern, options);
 
@@ -336,7 +335,6 @@ namespace StringLib
                 //Debug.WriteLine($"   {part}");
                 //Debug.WriteLine($"   {part.Mask.Convert()}");
                 //Debug.WriteLine($"");
-
                 //
                 string replacementText = $"{TagStart}{rule.Replace}{TagEnd}{match.Value}{TagStart}reset{TagEnd}";
 
@@ -368,7 +366,7 @@ namespace StringLib
             {
                 if (!item.IsImmutable)
                 {
-                    var items = CreateLeafs(item, rule, options);
+                    var items = Transform(item, rule, options);
 
                     if (items.Any())
                     {
@@ -391,16 +389,18 @@ namespace StringLib
             CreateBranch(new List<Text>() { new Text(text), }, 0, ref list, options);
 
             // concat
-            StringBuilder sb = new StringBuilder();
-            foreach (var item in list)
-            {
-                if (item.IsImmutable)
-                    sb.Append(item.Substitute);
-                else
-                    sb.Append(item.Value);
-            }
-            text = sb.ToString();
-            return text;
+            //StringBuilder sb = new StringBuilder();
+            //foreach (var item in list)
+            //{
+            //    if (item.IsImmutable)
+            //        sb.Append(item.Substitute);
+            //    else
+            //        sb.Append(item.Value);
+            //}
+            //text = sb.ToString();
+            //return text;
+
+            return string.Concat(list);
         }
 
         static ConsoleHelper()
