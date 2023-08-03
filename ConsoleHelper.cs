@@ -5,84 +5,25 @@ using System.Text.RegularExpressions;
 
 namespace StringLib
 {
-    public static class BitMaskExtension
-    {
-        public static string Convert(this BitArray obj)
-        {
-            StringBuilder sb = new StringBuilder(obj.Length);
-
-            for (int i = 0; i < obj.Length; i++)
-            {
-                sb.Append(obj[i] ? '^' : ' ');
-            }
-
-            return sb.ToString();
-        }
-        public static BitArray Submask(this BitArray obj, int index, int length = -1)
-        {
-            if (length < 0) length = obj.Length - index;
-            BitArray result = new BitArray(length);
-            for (int i = 0; i < length; i++)
-            {
-                result[i] = obj[index + i];
-            }
-            return result;
-        }
-        public static BitArray Concat(this BitArray obj, BitArray other)
-        {
-            int totalLength = obj.Length + other.Length;
-            BitArray result = new BitArray(totalLength);
-
-            for (int i = 0; i < obj.Length; i++)
-                result[i] = obj[i];
-            for (int i = 0; i < other.Length; i++)
-                result[i] = other[i];
-
-            return result;
-        }
-        public static void Fill(this BitArray obj, int index, int length = -1, bool value = true)
-        {
-            if (length < 0) length = obj.Length - index;
-            for (int i = index; i < index + length; i++)
-            {
-                obj[i] = value;
-            }
-        }
-        public static bool IsAllSet(this BitArray obj, bool optimistic = false)
-        {
-            if (obj.Length == 0) return false;
-            if (optimistic) return obj[0];
-
-            foreach (bool b in obj) if (b == false) return false;
-            return true;
-        }
-        public static int GetLength(this BitArray obj, int index)
-        {
-            int count = 0;
-            while (index + count < obj.Length && obj[index] == obj[index + count]) count++;
-            return count;
-        }
-
-    }
     public class Rule
     {
-        internal static Rule Empty = new Rule("Empty", "", "");
         internal static int RuleCounter = 1;
+
+        internal static Rule Empty = new Rule("Empty", "", "");
         public readonly string Name;
         public readonly string Pattern;  // regex  
         public readonly string Replace;
 
-
-        public Rule(string find, string replace) : this("Rule" + RuleCounter++, find, replace) { }
-
-
+        public Rule(string find, string replace) : this("Rule" + RuleCounter++, find, replace)
+        { }
         public Rule(string name, string find, string replace)
         {
             if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
             this.Name = name;
             this.Pattern = find;
-            this.Replace = replace;
+            this.Replace = replace;            
         }
+
         public override string ToString()
         {
             return Name;
@@ -90,26 +31,6 @@ namespace StringLib
     }
     public class ConsoleHelper
     {
-        internal class Text
-        {
-            public string Value;
-            public Text(string value)
-            {
-                this.Value = value;
-            }
-
-            public int Length => Value.Length;            
-
-            public Text Mid(int index, int length)
-            {
-                return new Text(Value.Substring(index, length));
-            }
-            public override string ToString()
-            {
-                return this.Value;
-            }
-        }
-
         public static Dictionary<string, ConsoleColor> ColorMap = new Dictionary<string, ConsoleColor>(StringComparer.OrdinalIgnoreCase)
         {
             { "black", ConsoleColor.Black },
@@ -158,8 +79,6 @@ namespace StringLib
         private RegexOptions Options { get; }
 
         public void WriteLine(string text, ConsoleColor foreground, ConsoleColor? background = null) => Write(text + Environment.NewLine, foreground, background);
-
-        public void WriteLine(string text, bool disableRules = false) => Write(text, true, disableRules);
         public void Write(string text, ConsoleColor foreground, ConsoleColor? background = null)
         {
             Console.ForegroundColor = foreground;
@@ -167,17 +86,15 @@ namespace StringLib
             Write(text, false, true);
         }
 
-        /// <summary>
-        /// Output string can be escaped with the following command '*e[foreground|(;background)m'
-        /// </summary>
-        /// <param name="text">output string</param>
+        public void WriteLine(string text, bool disableRules = false) => Write(text, true, disableRules);
+
         /// <seealso cref="ColorMap"/>
         public void Write(string text, bool addNewLine = false, bool skipRules = false)
         {
             int orig_len = text.Length;
             TTE = Stopwatch.StartNew();
             if (!skipRules)
-                text = ApplyRules(text, Options);
+                text = PreprocessRules(text, Options);
 
             string expression = $"({Regex.Escape(TagStart)}[\\w\\d]+([{Regex.Escape(Delim.ToString())}][\\w\\d]+)?{Regex.Escape(TagEnd)})";
             var matches = Regex.Matches(text, expression, Options);
@@ -225,18 +142,20 @@ namespace StringLib
             if (addNewLine)
                 Console.WriteLine();
             TTE.Stop();
-
+#if DEBUG
             Debug.WriteLine($"{nameof(Write)} processed {len}/{orig_len} characters{(skipRules | Rules.Count == 0 ? " not applying any rules" : $" processing {Rules.Count} rule(s)")} in {TTE.ElapsedMilliseconds}ms");
+#endif
         }
 
-        private List<Text> Rebuild(Text text, Dictionary<Match, string> items)
+        private List<string> Rebuild(string text, Dictionary<Match, string> items)
         {
+            var list = new List<string>();
+
             if (!items.Any())
-                return new List<Text>();
+                return list;
 
-            List<Text> list = new List<Text>();
 
-            Dictionary<int, Tuple<int, Text, string>> segments = new Dictionary<int, Tuple<int, Text, string>>();
+            Dictionary<int, Tuple<int, string, string>> segments = new Dictionary<int, Tuple<int, string, string>>();
 
             int prev_left = 0;
 
@@ -246,26 +165,26 @@ namespace StringLib
                 int right = m.Index + m.Length;
 
                 if (prev_left < left)
-                    segments.Add(prev_left, new Tuple<int, Text, string>(left, text.Mid(prev_left, left - prev_left), text.Mid(prev_left, left - prev_left).Value));
+                    segments.Add(prev_left, new Tuple<int, string, string>(left, text.Substring(prev_left, left - prev_left), text.Substring(prev_left, left - prev_left)));
 
-                segments.Add(left, new Tuple<int, Text, string>(right, text.Mid(left, right - left), items[m]));
+                segments.Add(left, new Tuple<int, string, string>(right, text.Substring(left, right - left), items[m]));
 
                 prev_left = right;
             }
             if (prev_left < text.Length)
-                segments.Add(prev_left, new Tuple<int, Text, string>(text.Length, text.Mid(prev_left, text.Length - prev_left), text.Mid(prev_left, text.Length - prev_left).Value));
+                segments.Add(prev_left, new Tuple<int, string, string>(text.Length, text.Substring(prev_left, text.Length - prev_left), text.Substring(prev_left, text.Length - prev_left)));
 
             foreach (var item in segments.Values)
             {
-                list.Add(new Text(item.Item3));
+                list.Add(item.Item3);
             }
 
             return list;
         }
 
-        private List<Text> MaskAndRebuild(Text text, Rule rule, RegexOptions options)
+        private List<string> MaskAndRebuild(string text, Rule rule, RegexOptions options)
         {
-            var matches = Regex.Matches(text.Value, rule.Pattern, options);
+            var matches = Regex.Matches(text, rule.Pattern, options);
             Dictionary<Match, string> replacements = new Dictionary<Match, string>();
             
             foreach (Match match in matches)
@@ -290,7 +209,7 @@ namespace StringLib
 
             return results;
         }
-        private void Traverse(List<Text> list, int ruleId, ref List<Text> ol, RegexOptions options)
+        private void Traverse(List<string> list, int ruleId, ref List<string> ol, RegexOptions options)
         {
             if (ruleId > Rules.Count - 1)
             {
@@ -314,10 +233,11 @@ namespace StringLib
                 }
             }
         }
-        private string ApplyRules(string text, RegexOptions options)
+        private string PreprocessRules(string text, RegexOptions options)
         {
-            var list = new List<Text>();
-            Traverse(new List<Text>() { new Text(text), }, 0, ref list, options);
+            var list = new List<string>();
+            
+            Traverse(new List<string>() { text, }, 0, ref list, options);
 
             return string.Concat(list);
         }
