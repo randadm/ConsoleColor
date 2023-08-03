@@ -93,110 +93,20 @@ namespace StringLib
         internal class Text
         {
             public string Value;
-            //public string Substitute;
-            //public Rule Rule;
-            public BitArray Mask;
-            public bool IsImmutable => Mask.IsAllSet();
-            public Text(string value, bool immutable = false)
+            public Text(string value)
             {
                 this.Value = value;
-                //                this.Substitute = "";
-                this.Mask = new BitArray(value.Length, immutable);
-                //                this.Rule = Rule.Empty;
-            }
-            private Text(string value, BitArray mask)
-            {
-                this.Value = value;
-                //                this.Substitute = "";
-                this.Mask = mask;
-                //                this.Rule = Rule.Empty;
-            }
-            public int Length => Value.Length;
-            public Text Insert(Text text, Match pos, Text insert, out int lengthChange)
-            {
-                Text left = text.Left(pos);
-                Text right = text.Right(pos);
-                int prev_len = pos.Length;
-                int new_len = insert.Length;
-
-                if (prev_len == new_len)
-                    lengthChange = 0;
-                else
-                    lengthChange = new_len - prev_len;
-
-                return left.Concat(insert).Concat(right);
-            }
-            public List<Text> Rebuild(Dictionary<Match, string> items)
-            {
-                if (!items.Any())
-                    return new List<Text>();
-
-                List<Text> list = new List<Text>();
-
-                Dictionary<int, Tuple<int, Text, string>> segments = new Dictionary<int, Tuple<int, Text, string>>();
-
-                int prev_left = 0;
-
-                foreach (Match m in items.Keys)
-                {
-                    int left = m.Index;
-                    int right = m.Index + m.Length;
-
-                    if (prev_left < left)
-                        segments.Add(prev_left, new Tuple<int, Text, string>(left, Mid(prev_left, left - prev_left), Mid(prev_left, left - prev_left).Value));
-
-                    segments.Add(left, new Tuple<int, Text, string>(right, Mid(left, right - left), items[m]));
-
-                    prev_left = right;
-                }
-                if (prev_left < Length)
-                    segments.Add(prev_left, new Tuple<int, Text, string>(Length, Mid(prev_left, Length - prev_left), Mid(prev_left, Length - prev_left).Value));
-
-                foreach (var item in segments.Values)
-                {
-                    list.Add(new Text(item.Item3));
-                }
-
-                //foreach (int j in segments.Keys)
-                //{
-                //    Text segment = Mid(j, segments[j] - j);
-                //    if (items.j))
-                //    {
-                //        segment.Substitute = replacements[segment.Value];
-                //    }
-                //    list.Add(segment);
-                //}
-
-
-                return list;
             }
 
-            public Text Left(Match m) => Left(m.Index);
-            public Text Right(Match m) => Right(m.Index + m.Length);
-            public Text Mid(Match m) => Mid(m.Index, m.Length);
-            public Text Left(int pos)
-            {
-                return new Text(Value.Substring(0, pos), Mask.Submask(0, pos));
-            }
-            public Text Right(int pos)
-            {
-                return new Text(Value.Substring(pos), Mask.Submask(pos));
-            }
+            public int Length => Value.Length;            
+
             public Text Mid(int index, int length)
             {
-                return new Text(Value.Substring(index, length), Mask.Submask(index, length));
-            }
-            public Text Concat(Text other)
-            {
-                return new Text(this.Value + other.Value, this.Mask.Concat(other.Mask));
-            }
-            internal Text Clone()
-            {
-                return new Text(Value, Mask);
+                return new Text(Value.Substring(index, length));
             }
             public override string ToString()
             {
-                return this.Value + (IsImmutable ? $" [{nameof(IsImmutable)}]" : "");
+                return this.Value;
             }
         }
 
@@ -318,19 +228,48 @@ namespace StringLib
 
             Debug.WriteLine($"{nameof(Write)} processed {len}/{orig_len} characters{(skipRules | Rules.Count == 0 ? " not applying any rules" : $" processing {Rules.Count} rule(s)")} in {TTE.ElapsedMilliseconds}ms");
         }
-        private List<Text> Transform(Text text, Rule rule, RegexOptions options)
+
+        private List<Text> Rebuild(Text text, Dictionary<Match, string> items)
         {
-            var matches = Regex.Matches(text.Value, rule.Pattern, options);
+            if (!items.Any())
+                return new List<Text>();
 
             List<Text> list = new List<Text>();
-            Dictionary<Match, string> replacements = new Dictionary<Match, string>();
 
+            Dictionary<int, Tuple<int, Text, string>> segments = new Dictionary<int, Tuple<int, Text, string>>();
+
+            int prev_left = 0;
+
+            foreach (Match m in items.Keys)
+            {
+                int left = m.Index;
+                int right = m.Index + m.Length;
+
+                if (prev_left < left)
+                    segments.Add(prev_left, new Tuple<int, Text, string>(left, text.Mid(prev_left, left - prev_left), text.Mid(prev_left, left - prev_left).Value));
+
+                segments.Add(left, new Tuple<int, Text, string>(right, text.Mid(left, right - left), items[m]));
+
+                prev_left = right;
+            }
+            if (prev_left < text.Length)
+                segments.Add(prev_left, new Tuple<int, Text, string>(text.Length, text.Mid(prev_left, text.Length - prev_left), text.Mid(prev_left, text.Length - prev_left).Value));
+
+            foreach (var item in segments.Values)
+            {
+                list.Add(new Text(item.Item3));
+            }
+
+            return list;
+        }
+
+        private List<Text> MaskAndRebuild(Text text, Rule rule, RegexOptions options)
+        {
+            var matches = Regex.Matches(text.Value, rule.Pattern, options);
+            Dictionary<Match, string> replacements = new Dictionary<Match, string>();
+            
             foreach (Match match in matches)
             {
-                text.Mask.Fill(match.Index, match.Length);
-
-                Text part = text.Mid(match);
-
                 //Debug.WriteLine($">> Creating {nameof(text.IsImmutable)}: pos= {match.Index}, len= {match.Length} ");
                 //Debug.WriteLine($"   {part}");
                 //Debug.WriteLine($"   {part.Mask.Convert()}");
@@ -347,12 +286,11 @@ namespace StringLib
             //Debug.WriteLine($"   {text.Mask.Convert()}");
             //Debug.WriteLine($"");
 
-            var results = text.Rebuild(replacements);
-
+            var results = Rebuild(text,replacements);
 
             return results;
         }
-        private void CreateBranch(List<Text> list, int ruleId, ref List<Text> ol, RegexOptions options)
+        private void Traverse(List<Text> list, int ruleId, ref List<Text> ol, RegexOptions options)
         {
             if (ruleId > Rules.Count - 1)
             {
@@ -364,18 +302,11 @@ namespace StringLib
 
             foreach (var item in list)
             {
-                if (!item.IsImmutable)
-                {
-                    var items = Transform(item, rule, options);
+                var items = MaskAndRebuild(item, rule, options);
 
-                    if (items.Any())
-                    {
-                        CreateBranch(items, ruleId + 1, ref ol, options);
-                    }
-                    else
-                    {
-                        ol.Add(item);
-                    }
+                if (items.Any())
+                {
+                    Traverse(items, ruleId + 1, ref ol, options);
                 }
                 else
                 {
@@ -386,7 +317,7 @@ namespace StringLib
         private string ApplyRules(string text, RegexOptions options)
         {
             var list = new List<Text>();
-            CreateBranch(new List<Text>() { new Text(text), }, 0, ref list, options);
+            Traverse(new List<Text>() { new Text(text), }, 0, ref list, options);
 
             return string.Concat(list);
         }

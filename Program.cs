@@ -6,7 +6,6 @@ using System.Text.RegularExpressions;
 var console = new ConsoleHelper(RegexOptions.IgnoreCase);
 
 console.Rules.Add(new Rule("Comments", "\\/\\/.*\r", "green"));
-console.Rules.Add(new Rule("Comments", "/\\*.*\\*/", "red"));
 
 /* 
  * 
@@ -16,5 +15,5 @@ console.Rules.Add(new Rule("Comments", "/\\*.*\\*/", "red"));
  */
 
 
-string text = File.ReadAllText(@"..\..\..\Program.cs");
+string text = File.ReadAllText(@"..\..\..\ConsoleHelper.cs");
 console.WriteLine(text);
