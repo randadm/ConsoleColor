@@ -388,18 +388,6 @@ namespace StringLib
             var list = new List<Text>();
             CreateBranch(new List<Text>() { new Text(text), }, 0, ref list, options);
 
-            // concat
-            //StringBuilder sb = new StringBuilder();
-            //foreach (var item in list)
-            //{
-            //    if (item.IsImmutable)
-            //        sb.Append(item.Substitute);
-            //    else
-            //        sb.Append(item.Value);
-            //}
-            //text = sb.ToString();
-            //return text;
-
             return string.Concat(list);
         }
 
